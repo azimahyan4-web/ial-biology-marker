@@ -625,7 +625,7 @@ async function renderTeacher(main) {
   const marks = marksRes.ok ? marksRes.marks : [];
   const students = usersRes.ok ? usersRes.students : [];
   const mine = marks.filter(m => m.gradedBy === session.username && m.status !== 'pending').sort((a, b) => new Date(b.date) - new Date(a.date));
-  const pending = marks.filter(m => m.status === 'pending' && schemes.some(s => s.year === m.year && s.session === m.session && s.unit === m.unit));
+  const pending = marks.filter(m => m.status === 'pending' && schemes.some(s => String(s.year) === String(m.year) && s.session === m.session && s.unit === m.unit));
   const avg = mine.length ? Math.round(mine.reduce((s, m) => s + (m.score / m.max) * 100, 0) / mine.length) : null;
 
   main.innerHTML = `
