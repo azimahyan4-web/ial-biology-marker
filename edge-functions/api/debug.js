@@ -12,26 +12,25 @@ export async function onRequest({ env }) {
   try {
     const apiKey = await kvGet(env, 'config_apikey');
     out.hasApiKey = !!apiKey;
-    out.apiKeyPreview = apiKey ? (apiKey.slice(0, 10) + '...' + apiKey.slice(-4)) : null;
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey || '',
-        'anthropic-version': '2023-06-01'
+        'anthropic-version': '2023-06-01',
+        'User-Agent': 'Markbook/1.0 (+https://ial-biology-marker.edgeone.dev)',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 20, messages: [{ role: 'user', content: 'Say hi' }] })
     });
     out.status = res.status;
-    out.statusText = res.statusText;
-    out.headers = {};
-    for (const [k, v] of res.headers.entries()) out.headers[k] = v;
+    out.cfRay = res.headers.get('cf-ray');
+    out.server = res.headers.get('server');
     const text = await res.text();
-    out.bodyPreview = text.slice(0, 1500);
+    out.bodyPreview = text.slice(0, 1000);
   } catch (e) {
     out.fetchError = e && e.message ? e.message : String(e);
-    out.fetchErrorName = e && e.name ? e.name : null;
   }
   return new Response(JSON.stringify(out, null, 2), { headers: { 'content-type': 'application/json' } });
 }
