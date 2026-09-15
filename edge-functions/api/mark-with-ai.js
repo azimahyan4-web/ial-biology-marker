@@ -72,14 +72,16 @@ async function handleRequest({ request, env }) {
   content.push({ type: 'text', text: "STUDENT'S ANSWER (scanned pages, in order):" });
   submission.pages.forEach(p => content.push({ type: 'image', source: { type: 'base64', media_type: p.mediaType, data: p.base64 } }));
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  if (!env.PROXY_URL || !env.PROXY_SECRET) {
+    return json({ ok: false, error: 'Proxy is not configured. Set PROXY_URL and PROXY_SECRET as environment variables in EdgeOne.' });
+  }
+
+  const res = await fetch(env.PROXY_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'User-Agent': 'Markbook/1.0 (+https://ial-biology-marker.edgeone.dev)',
-      'Accept': 'application/json'
+      'x-proxy-secret': env.PROXY_SECRET,
+      'x-anthropic-key': apiKey
     },
     body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 1000, system: system, messages: [{ role: 'user', content: content }] })
   });
