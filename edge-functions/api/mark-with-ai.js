@@ -20,6 +20,8 @@ async function findActor(env, username, password) {
   }
   let rec = await kvGet(env, 'user_teacher_' + uname);
   if (rec) return rec.password === password ? { role: 'teacher', username: rec.username } : null;
+  rec = await kvGet(env, 'user_student_' + uname);
+  if (rec) return rec.password === password ? { role: 'student', username: rec.username } : null;
   return null;
 }
 function schemeKey(year, sessionVal, unit) {
@@ -38,6 +40,10 @@ export async function onRequest({ request, env }) {
 
   const submission = await kvGet(env, body.id);
   if (!submission || !submission.pages || !submission.pages.length) return json({ ok: false, error: 'Submission not found or has no pages.' }, 404);
+
+  // A student may only trigger marking for their own submission (used by the
+  // automatic marking flow); teachers/admin may trigger for anyone's.
+  if (actor.role === 'student' && submission.student !== actor.username) return json({ ok: false, error: 'Not authorized.' }, 403);
 
   const scheme = await kvGet(env, schemeKey(submission.year, submission.session, submission.unit));
   if (!scheme) return json({ ok: false, error: 'No mark scheme found for this paper.' });
