@@ -29,6 +29,14 @@ function schemeKey(year, sessionVal, unit) {
 }
 
 export async function onRequest({ request, env }) {
+  try {
+    return await handleRequest({ request, env });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: 'Unexpected server error: ' + (e && e.message ? e.message : String(e)) }), { status: 500, headers: { 'content-type': 'application/json' } });
+  }
+}
+
+async function handleRequest({ request, env }) {
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   let body;
   try { body = await request.json(); } catch (e) { return json({ ok: false, error: 'Invalid request body.' }, 400); }
