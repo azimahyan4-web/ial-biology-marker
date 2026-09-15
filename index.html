@@ -916,9 +916,13 @@ async function onSubmitForMarking() {
     msg.textContent = `This submission is large (${Math.round(approxBytes / 1024 / 1024)}MB) and may be rejected by the server. If it fails, try submitting in two smaller batches instead of ${pages.length} pages at once.`;
   }
   const btn = document.getElementById('submitForMarkingBtn');
-  btn.disabled = true; btn.textContent = 'Submitting…';
+  btn.disabled = true;
+  btn.textContent = 'Marking your paper… this can take up to a minute';
+  msg.className = 'msg';
+  msg.textContent = "Claude is reading your answer against the mark scheme — don't close this page.";
   const res = await marksApi('submit', { year: s.year, session: s.session, unit: s.unit, question, pages });
-  btn.disabled = false; btn.textContent = 'Submit for marking';
+  btn.disabled = false;
+  btn.textContent = 'Submit for marking';
   if (!res.ok) { msg.className = 'msg err'; msg.textContent = res.error || 'Something went wrong.'; return; }
   studentPages = [];
   studentSelection = { year: null, session: null, unit: null };
