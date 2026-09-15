@@ -917,17 +917,33 @@ async function onSubmitForMarking() {
   }
   const btn = document.getElementById('submitForMarkingBtn');
   btn.disabled = true;
-  btn.textContent = 'Marking your paper… this can take up to a minute';
-  msg.className = 'msg';
-  msg.textContent = "Claude is reading your answer against the mark scheme — don't close this page.";
+  btn.textContent = 'Submitting…';
+
+  // Step 1: save the submission. This is fast and must always succeed —
+  // marking happens as a separate follow-up call so a slow Claude response
+  // can never risk losing the submission itself.
   const res = await marksApi('submit', { year: s.year, session: s.session, unit: s.unit, question, pages });
   btn.disabled = false;
   btn.textContent = 'Submit for marking';
   if (!res.ok) { msg.className = 'msg err'; msg.textContent = res.error || 'Something went wrong.'; return; }
+
   studentPages = [];
   studentSelection = { year: null, session: null, unit: null };
   studentView = 'select';
-  render();
+  await render(); // shows the new submission as Pending right away
+
+  // Step 2: trigger marking in the background and finalize it once done.
+  // If this fails for any reason, the submission simply stays Pending —
+  // a teacher can still mark it manually from "Submissions to mark".
+  markThenSave(res.id);
+}
+
+async function markThenSave(id) {
+  const aiRes = await markWithAI(id);
+  if (!aiRes.ok) return; // stays Pending; nothing else to do here
+  await marksApi('save', { id, score: aiRes.score, max: aiRes.max, feedback: aiRes.feedback });
+  // Refresh the view if the student is still looking at their results.
+  if (session && session.role === 'student' && studentView === 'select') render();
 }
 
 // Restore a saved session on page load, so a reload doesn't drop back to login.
