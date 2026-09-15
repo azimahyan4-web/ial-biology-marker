@@ -13,7 +13,7 @@ async function kvGet(env, key) {
   return (Array.isArray(rows) && rows[0]) ? rows[0].value : null;
 }
 async function kvPut(env, key, value) {
-  const res = await fetch(env.SUPABASE_URL + '/rest/v1/kv_store', {
+  const res = await fetch(env.SUPABASE_URL + '/rest/v1/kv_store?on_conflict=key', {
     method: 'POST',
     headers: Object.assign({}, sbHeaders(env), { Prefer: 'resolution=merge-duplicates' }),
     body: JSON.stringify({ key, value })
