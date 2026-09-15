@@ -27,8 +27,12 @@ async function kvPut(env, key, value) {
 async function kvDelete(env, key) {
   await fetch(env.SUPABASE_URL + '/rest/v1/kv_store?key=eq.' + encodeURIComponent(key), { method: 'DELETE', headers: sbHeaders(env) });
 }
-async function kvList(env, prefix) {
-  const res = await fetch(env.SUPABASE_URL + '/rest/v1/kv_store?key=like.' + encodeURIComponent(prefix) + '*&select=key,value', { headers: sbHeaders(env) });
+async function kvListSchemesMeta(env, prefix) {
+  // Reads from a view that strips the heavy file content (the actual PDF/
+  // image bytes) server-side, so listing every scheme never has to transfer
+  // dozens of full files at once — same class of fix as the marks list.
+  const res = await fetch(env.SUPABASE_URL + '/rest/v1/kv_schemes_meta?key=like.' + encodeURIComponent(prefix) + '*&select=key,value', { headers: sbHeaders(env) });
+  if (!res.ok) throw new Error('Could not load schemes (' + res.status + ').');
   const rows = await res.json();
   return Array.isArray(rows) ? rows : [];
 }
@@ -64,8 +68,15 @@ async function handleRequest({ request, env }) {
   if (!actor || actor.role === 'student') return json({ ok: false, error: 'Not authorized.' }, 403);
 
   if (body.action === 'list') {
-    const rows = await kvList(env, 'scheme_');
+    const rows = await kvListSchemesMeta(env, 'scheme_');
     return json({ ok: true, schemes: rows.map(r => r.value) });
+  }
+
+  if (body.action === 'get') {
+    const { year, session: sessionVal, unit } = body;
+    const record = await kvGet(env, schemeKey(year, sessionVal, unit));
+    if (!record) return json({ ok: false, error: 'Scheme not found.' }, 404);
+    return json({ ok: true, scheme: record });
   }
 
   if (body.action === 'upsert') {
