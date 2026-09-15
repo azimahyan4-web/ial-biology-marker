@@ -10,11 +10,16 @@ async function kvGet(env, key) {
   return (Array.isArray(rows) && rows[0]) ? rows[0].value : null;
 }
 async function kvPut(env, key, value) {
-  await fetch(env.SUPABASE_URL + '/rest/v1/kv_store', {
+  const res = await fetch(env.SUPABASE_URL + '/rest/v1/kv_store', {
     method: 'POST',
     headers: Object.assign({}, sbHeaders(env), { Prefer: 'resolution=merge-duplicates' }),
     body: JSON.stringify({ key, value })
   });
+  if (!res.ok) {
+    let detail = '';
+    try { detail = await res.text(); } catch (e) {}
+    throw new Error('Supabase write failed (' + res.status + '): ' + detail.slice(0, 300));
+  }
 }
 async function findAdmin(env, username, password) {
   if (String(username || '').trim().toLowerCase() !== 'admin') return null;
@@ -23,6 +28,14 @@ async function findAdmin(env, username, password) {
 }
 
 export async function onRequest({ request, env }) {
+  try {
+    return await handleRequest({ request, env });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: 'Unexpected server error: ' + (e && e.message ? e.message : String(e)) }), { status: 500, headers: { 'content-type': 'application/json' } });
+  }
+}
+
+async function handleRequest({ request, env }) {
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   let body;
   try { body = await request.json(); } catch (e) { return json({ ok: false, error: 'Invalid request body.' }, 400); }
