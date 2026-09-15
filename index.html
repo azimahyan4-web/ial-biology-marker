@@ -224,7 +224,8 @@ const SUBJECT_LABEL = 'Advanced Biology';
 const SESSIONS = ['January', 'June', 'October'];
 const UNITS = ['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4', 'Unit 5', 'Unit 6'];
 
-let session = null; // { role, username, password } — password kept in memory only, sent with each API call
+let session = null; // { role, username, password } — persisted in sessionStorage so reloads don't log you out
+const SESSION_KEY = 'markbook_session';
 
 /* =========================================================================
    LOGIN
@@ -241,11 +242,13 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   btn.disabled = false; btn.textContent = 'Log in';
   if (!res.ok) { errEl.textContent = res.error || 'Something went wrong.'; return; }
   session = { role: res.role, username: res.username, password: p };
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
   enterApp();
 });
 
 function doLogout() {
   session = null;
+  try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginForm').reset();
@@ -351,6 +354,7 @@ document.getElementById('pwForm').addEventListener('submit', async (e) => {
   const res = await authApi('change-password', { username: session.username, currentPassword: cur, newPassword: next });
   if (!res.ok) { msg.textContent = res.error || 'Something went wrong.'; return; }
   session.password = next;
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
   closePwModal();
   render();
 });
@@ -921,6 +925,15 @@ async function onSubmitForMarking() {
   studentView = 'select';
   render();
 }
+
+// Restore a saved session on page load, so a reload doesn't drop back to login.
+// Placed at the end of the script so everything it depends on is already defined.
+(function restoreSession() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (raw) { session = JSON.parse(raw); enterApp(); }
+  } catch (e) {}
+})();
 </script>
 </body>
 </html>
