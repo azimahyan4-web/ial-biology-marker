@@ -74,7 +74,13 @@ async function handleRequest({ request, env }) {
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'User-Agent': 'Markbook/1.0 (+https://ial-biology-marker.edgeone.dev)',
+      'Accept': 'application/json'
+    },
     body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 1000, system: system, messages: [{ role: 'user', content: content }] })
   });
 
