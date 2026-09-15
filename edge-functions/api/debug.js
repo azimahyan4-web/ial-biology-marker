@@ -1,28 +1,44 @@
-export async function onRequest({ env }) {
-  const out = {
-    hasSupabaseUrl: !!(env && env.SUPABASE_URL),
-    hasSupabaseKey: !!(env && env.SUPABASE_SERVICE_KEY),
-    urlPreview: env && env.SUPABASE_URL ? env.SUPABASE_URL.slice(0, 40) : null
-  };
+function sbHeaders(env) {
+  return { apikey: env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + env.SUPABASE_SERVICE_KEY, 'Content-Type': 'application/json' };
+}
+async function kvGet(env, key) {
+  const res = await fetch(env.SUPABASE_URL + '/rest/v1/kv_store?key=eq.' + encodeURIComponent(key) + '&select=value', { headers: sbHeaders(env) });
+  const rows = await res.json();
+  return (Array.isArray(rows) && rows[0]) ? rows[0].value : null;
+}
+
+export async function onRequest({ request, env }) {
+  const out = { step: 'start', method: request.method };
   try {
-    const testUrl = env.SUPABASE_URL + '/rest/v1/kv_store?select=key&limit=1';
-    const res = await fetch(testUrl, {
-      headers: {
-        apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: 'Bearer ' + env.SUPABASE_SERVICE_KEY,
-        'Content-Type': 'application/json'
-      }
-    });
-    out.supabaseCallMade = true;
-    out.supabaseStatus = res.status;
-    out.supabaseStatusText = res.statusText;
-    let bodyText = '';
-    try { bodyText = await res.text(); } catch (e) { bodyText = '(could not read body: ' + e.message + ')'; }
-    out.supabaseBody = bodyText.slice(0, 500);
+    out.step = 'parsing body';
+    let body = {};
+    if (request.method === 'POST') {
+      const text = await request.text();
+      out.rawBodyLength = text.length;
+      body = text ? JSON.parse(text) : {};
+    }
+    out.bodyReceived = body;
+
+    out.step = 'checking admin';
+    const adminRec = await kvGet(env, 'user_admin');
+    out.adminRecFound = !!adminRec;
+
+    out.step = 'checking teacher';
+    const uname = String(body.username || body.actorUsername || '').toLowerCase();
+    const teacherRec = await kvGet(env, 'user_teacher_' + uname);
+    out.teacherRecFound = !!teacherRec;
+
+    out.step = 'checking student';
+    const studentRec = await kvGet(env, 'user_student_' + uname);
+    out.studentRecFound = !!studentRec;
+
+    out.step = 'done';
+    out.success = true;
   } catch (e) {
-    out.supabaseCallMade = false;
-    out.fetchError = e && e.message ? e.message : String(e);
-    out.fetchErrorName = e && e.name ? e.name : null;
+    out.success = false;
+    out.errorMessage = e && e.message ? e.message : String(e);
+    out.errorName = e && e.name ? e.name : null;
+    out.errorStack = e && e.stack ? String(e.stack).slice(0, 800) : null;
   }
   return new Response(JSON.stringify(out, null, 2), { headers: { 'content-type': 'application/json' } });
 }
