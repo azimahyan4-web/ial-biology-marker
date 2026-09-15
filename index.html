@@ -476,6 +476,22 @@ async function fileToSchemeRecord(file) {
   }
   throw new Error('Unsupported file type. Use PDF, PNG, JPG, WEBP or TXT.');
 }
+async function openSchemeFile(scheme, btn) {
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Opening…';
+  const res = await schemesApi('get', { year: scheme.year, session: scheme.session, unit: scheme.unit });
+  btn.disabled = false;
+  btn.textContent = originalText;
+  if (!res.ok || !res.scheme) { alert(res.error || 'Could not open this file.'); return; }
+  const file = res.scheme.file;
+  if (file.kind === 'text') {
+    window.open(URL.createObjectURL(new Blob([file.content], { type: 'text/plain' })), '_blank');
+  } else {
+    const dataUrl = 'data:' + file.mediaType + ';base64,' + file.base64;
+    window.open(dataUrl, '_blank');
+  }
+}
 async function handleSchemeFiles(fileList) {
   const files = Array.from(fileList);
   const msg = document.getElementById('schemeUploadMsg');
@@ -518,12 +534,13 @@ function renderSchemeList(schemes) {
     <div class="list-item" style="flex-direction:column; align-items:stretch;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
         <div><div class="li-title">${esc(s.year)} • ${esc(s.session)} • ${esc(s.unit)}</div><div class="li-sub">${esc(s.file.name)} • uploaded by ${esc(s.createdBy)}</div></div>
-        <div class="li-right"><span class="pill pill-green">Available</span><button class="btn-outline" data-notes="${i}" style="padding:6px 12px; font-size:12.5px;">${s.guidance ? 'Edit notes' : 'Add notes'}</button><button class="remove-x" data-remove="${i}">Remove</button></div>
+        <div class="li-right"><span class="pill pill-green">Available</span><button class="btn-outline" data-open="${i}" style="padding:6px 12px; font-size:12.5px;">Open</button><button class="btn-outline" data-notes="${i}" style="padding:6px 12px; font-size:12.5px;">${s.guidance ? 'Edit notes' : 'Add notes'}</button><button class="remove-x" data-remove="${i}">Remove</button></div>
       </div>
       ${s.guidance ? `<div class="feedback-box" style="margin-top:10px;">${esc(s.guidance)}</div>` : ''}
       <div id="notesEditor${i}"></div>
     </div>
   `).join('');
+  wrap.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => openSchemeFile(items[parseInt(btn.dataset.open, 10)], btn)));
   wrap.querySelectorAll('[data-remove]').forEach(btn => btn.addEventListener('click', async () => {
     const s = items[parseInt(btn.dataset.remove, 10)];
     await schemesApi('remove', { year: s.year, session: s.session, unit: s.unit });
