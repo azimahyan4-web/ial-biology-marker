@@ -813,12 +813,40 @@ async function renderStudentUpload(main) {
   renderPagesArea();
 }
 
+function compressImageFile(file, maxDim, quality) {
+  maxDim = maxDim || 1500;
+  quality = quality || 0.72;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve({ name: file.name, mediaType: 'image/jpeg', base64: dataUrl.split(',')[1], dataUrl });
+      };
+      img.onerror = () => reject(new Error('Could not load image ' + file.name));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read ' + file.name));
+    reader.readAsDataURL(file);
+  });
+}
 function fileToParts(file) {
+  if (file.type && file.type.startsWith('image/')) return compressImageFile(file);
+  // Non-image files (PDFs) can't be resized via canvas — send as-is.
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result;
-      resolve({ name: file.name, mediaType: file.type || 'image/jpeg', base64: dataUrl.split(',')[1], dataUrl });
+      resolve({ name: file.name, mediaType: file.type || 'application/pdf', base64: dataUrl.split(',')[1], dataUrl });
     };
     reader.onerror = () => reject(new Error('Could not read ' + file.name));
     reader.readAsDataURL(file);
@@ -826,12 +854,14 @@ function fileToParts(file) {
 }
 async function handleAnswerFiles(fileList) {
   const files = Array.from(fileList || []);
+  const msg = document.getElementById('submitMsg');
+  if (msg) { msg.className = 'msg'; msg.textContent = files.length > 1 ? 'Processing pages…' : ''; }
   for (const file of files) {
     try { studentPages.push(await fileToParts(file)); } catch (err) {
-      const msg = document.getElementById('submitMsg');
       if (msg) { msg.className = 'msg err'; msg.textContent = err.message; }
     }
   }
+  if (msg && msg.textContent === 'Processing pages…') msg.textContent = '';
   renderPagesArea();
   const btn = document.getElementById('submitForMarkingBtn');
   if (btn) btn.disabled = studentPages.length === 0;
@@ -875,9 +905,14 @@ async function onSubmitForMarking() {
   if (studentPages.length === 0) { msg.className = 'msg err'; msg.textContent = 'Add at least one page first.'; return; }
   const question = document.getElementById('submitQuestion').value.trim() || 'Whole paper';
   const s = studentSelection;
+  const pages = studentPages.map(p => ({ name: p.name, mediaType: p.mediaType, base64: p.base64 }));
+  const approxBytes = pages.reduce((sum, p) => sum + p.base64.length * 0.75, 0);
+  if (approxBytes > 9 * 1024 * 1024) {
+    msg.className = 'msg err';
+    msg.textContent = `This submission is large (${Math.round(approxBytes / 1024 / 1024)}MB) and may be rejected by the server. If it fails, try submitting in two smaller batches instead of ${pages.length} pages at once.`;
+  }
   const btn = document.getElementById('submitForMarkingBtn');
   btn.disabled = true; btn.textContent = 'Submitting…';
-  const pages = studentPages.map(p => ({ name: p.name, mediaType: p.mediaType, base64: p.base64 }));
   const res = await marksApi('submit', { year: s.year, session: s.session, unit: s.unit, question, pages });
   btn.disabled = false; btn.textContent = 'Submit for marking';
   if (!res.ok) { msg.className = 'msg err'; msg.textContent = res.error || 'Something went wrong.'; return; }
