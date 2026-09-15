@@ -29,6 +29,15 @@ async function kvList(env, prefix) {
   const rows = await res.json();
   return Array.isArray(rows) ? rows : [];
 }
+async function kvListMarksMeta(env, prefix) {
+  // Reads from a view that strips the heavy `pages` field server-side, so
+  // listing someone's submissions never has to transfer all their scanned
+  // images at once — that's what was causing oversized-response failures.
+  const res = await fetch(env.SUPABASE_URL + '/rest/v1/kv_marks_meta?key=like.' + encodeURIComponent(prefix) + '*&select=key,value', { headers: sbHeaders(env) });
+  if (!res.ok) throw new Error('Could not load results (' + res.status + ').');
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows : [];
+}
 async function findActor(env, username, password) {
   const uname = keySafe(username);
   if (uname === 'admin') {
@@ -80,8 +89,11 @@ async function handleRequest({ request, env }) {
 
   if (body.action === 'list') {
     const prefix = actor.role === 'student' ? 'mark_' + keySafe(actor.username) + '_' : 'mark_';
-    const rows = await kvList(env, prefix);
-    const marks = rows.map(r => { const { pages, ...rest } = r.value; return { id: r.key, ...rest, pageCount: (pages || []).length }; });
+    const rows = await kvListMarksMeta(env, prefix);
+    // The view already excludes `pages`; pageCount isn't available here for
+    // pending items, so just report whether pages existed originally isn't
+    // tracked — teachers see this via the raw pending record when marking.
+    const marks = rows.map(r => ({ id: r.key, ...r.value }));
     return json({ ok: true, marks });
   }
 
